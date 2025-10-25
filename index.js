@@ -2,16 +2,21 @@ import express from "express";
 import mongoose from "mongoose";
 import userRouter from "./routes/userRouter.js";
 import jwt from "jsonwebtoken";
+import cors from "cors";
 import productRouter from "./routes/productRouter.js";
+import dotenv from "dotenv";
 
-const mongoURI =
-  "mongodb+srv://admin:1234@cluster0.1vozfbx.mongodb.net/studentDB?retryWrites=true&w=majority&appName=Cluster0";
+dotenv.config();
+
+const mongoURI = process.env.MONGO_URL;
 
 mongoose.connect(mongoURI).then(() => {
   console.log("Connected to MongoDB Cluster");
 });
 
 const app = express();
+
+app.use(cors());
 
 app.use(express.json());
 
@@ -40,8 +45,8 @@ app.use((req, res, next) => {
   }
 });
 
-app.use("/users", userRouter);
-app.use("/products", productRouter);
+app.use("/api/users", userRouter);
+app.use("/api/products", productRouter);
 
 app.listen(5000, () => {
   console.log("server is running");
