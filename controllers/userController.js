@@ -112,7 +112,7 @@ export function loginUser(req, res) {
 
   User.find({ email: email }).then((users) => {
     if (users[0] == null) {
-      res.json({
+      res.status(404).json({
         message: "User not found",
       });
     } else {
@@ -123,8 +123,8 @@ export function loginUser(req, res) {
       if (isPasswordCorrect) {
         const payload = {
           email: user.email,
-          firstName: user.firstName,
-          lastName: user.lastName,
+          firstName: user.firstname,
+          lastName: user.lastname,
           role: user.role,
           isEmailVerified: user.isEmailVerified,
           image: user.image,

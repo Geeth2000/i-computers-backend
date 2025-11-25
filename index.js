@@ -5,6 +5,7 @@ import jwt from "jsonwebtoken";
 import cors from "cors";
 import productRouter from "./routes/productRouter.js";
 import dotenv from "dotenv";
+import orderRouter from "./routes/orderRouter.js";
 
 dotenv.config();
 
@@ -26,15 +27,12 @@ app.use((req, res, next) => {
   if (authorizationHeader != null) {
     const token = authorizationHeader.replace("Bearer ", "");
 
-    jwt.verify(token, "secretKey96$2025", (error, content) => {
+    jwt.verify(token, process.env.JWT_SECRET, (error, content) => {
       if (content == null) {
-        console.log("invalid token");
-
         res.status(404).json({
           message: "invalid token",
         });
       } else {
-        console.log("content: ", content);
         req.user = content;
 
         next();
@@ -47,6 +45,7 @@ app.use((req, res, next) => {
 
 app.use("/api/users", userRouter);
 app.use("/api/products", productRouter);
+app.use("/api/orders", orderRouter);
 
 app.listen(5000, () => {
   console.log("server is running");
