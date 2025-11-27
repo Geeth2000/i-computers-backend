@@ -78,3 +78,26 @@ export async function getOrders(req, res) {
     res.json(orders);
   }
 }
+
+export async function updateOrderstatus(req, res) {
+  if (!isAdmin(req)) {
+    res.status(403).json({ message: "Forbidden" });
+    return;
+  }
+  try {
+    const orderId = req.params.orderId;
+    const status = req.body.status;
+    const notes = req.body.notes;
+
+    await Order.updateOne(
+      { orderId: orderId },
+      { $set: { status: status, notes: notes } }
+    );
+    res.json({ message: "Order status updated successfully" });
+  } catch (error) {
+    console.error("Order update error:", error);
+    res
+      .status(500)
+      .json({ message: "Error updating order status", error: error.message });
+  }
+}
