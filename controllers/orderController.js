@@ -4,8 +4,6 @@ import { isAdmin } from "./userController.js";
 
 export async function createOrder(req, res) {
   try {
-    console.log("Incoming order:", req.body);
-
     const latestOrder = await Order.findOne().sort({ date: -1 });
     let orderId = "ORD000001";
 
@@ -55,7 +53,6 @@ export async function createOrder(req, res) {
       total,
     });
   } catch (error) {
-    console.error("Order create error:", error);
     return res.status(500).json({
       message: "Error creating order",
       error: error.message,
@@ -95,7 +92,6 @@ export async function updateOrderstatus(req, res) {
     );
     res.json({ message: "Order status updated successfully" });
   } catch (error) {
-    console.error("Order update error:", error);
     res
       .status(500)
       .json({ message: "Error updating order status", error: error.message });

@@ -6,11 +6,11 @@ const userSchema = new mongoose.Schema({
     require: true,
     unique: true,
   },
-  firstname: {
+  firstName: {
     type: String,
     require: true,
   },
-  lastname: {
+  lastName: {
     type: String,
     require: true,
   },
@@ -33,7 +33,7 @@ const userSchema = new mongoose.Schema({
   image: {
     type: String,
     require: true,
-    default: "/default,jpg",
+    default: "/default.jpg",
   },
 });
 
