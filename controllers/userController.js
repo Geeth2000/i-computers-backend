@@ -3,8 +3,21 @@ import bcrypt from "bcrypt";
 import jwt from "jsonwebtoken";
 import dotenv from "dotenv";
 import axios from "axios";
+import nodemailer from "nodemailer";
+import Otp from "../models/Otp.js";
 
 dotenv.config();
+
+const transporter = nodemailer.createTransport({
+  service: "gmail",
+  host: "smtp.gmail.com",
+  port: 587,
+  secure: false,
+  auth: {
+    user: "karunarathnageeth123@gmail.com",
+    pass: process.env.GMAIL_APP_PASSWORD,
+  },
+});
 
 export function createUser(req, res) {
   const data = req.body;
@@ -36,6 +49,13 @@ export function loginUser(req, res) {
       });
     } else {
       const user = users[0];
+
+      if (user.isBlocked) {
+        res.status(403).json({
+          message: "User is blocked. Contact admin.",
+        });
+        return;
+      }
 
       const isPasswordCorrect = bcrypt.compareSync(password, user.password);
 
@@ -103,6 +123,8 @@ export async function googleLogin(req, res) {
     console.log(response.data);
 
     const user = await User.findOne({ email: response.data.email });
+
+    // USER NOT FOUND → CREATE NEW USER
     if (user == null) {
       const newUser = new User({
         email: response.data.email,
@@ -112,6 +134,7 @@ export async function googleLogin(req, res) {
         role: "user",
         image: response.data.picture,
       });
+
       await newUser.save();
 
       const payload = {
@@ -127,36 +150,184 @@ export async function googleLogin(req, res) {
         expiresIn: "150h",
       });
 
-      res.json({
+      // FIXED: use newUser.role
+      return res.json({
         message: "Login successful",
         token: token,
-        role: user.role,
+        role: newUser.role,
       });
     } else {
-      const payload = {
-        email: user.email,
-        firstName: user.firstName,
-        lastName: user.lastName,
-        role: user.role,
-        isEmailVerified: user.isEmailVerified,
-        image: user.image,
-      };
-
-      const token = jwt.sign(payload, process.env.JWT_SECRET, {
-        expiresIn: "150h",
-      });
-
-      res.json({
-        message: "Login successful",
-        token: token,
-        role: user.role,
-      });
+      if (user.isBlocked) {
+        res.status(403).json({
+          message: "User is blocked. Contact admin.",
+        });
+        return;
+      }
     }
+
+    // USER FOUND → NORMAL LOGIN
+    const payload = {
+      email: user.email,
+      firstName: user.firstName,
+      lastName: user.lastName,
+      role: user.role,
+      isEmailVerified: user.isEmailVerified,
+      image: user.image,
+    };
+
+    const token = jwt.sign(payload, process.env.JWT_SECRET, {
+      expiresIn: "150h",
+    });
+
+    // FIXED: use user.role
+    return res.json({
+      message: "Login successful",
+      token: token,
+      role: user.role,
+    });
   } catch (error) {
-    res.status(500).json({
+    return res.status(500).json({
       message: "Google login failed",
       error: error.message,
     });
   }
 }
-//add try catch for async-await
+
+export async function validateOTPAndUpdatePassword(req, res) {
+  try {
+    const otp = req.body.otp;
+    const email = req.body.email;
+    const newPassword = req.body.newPassword;
+
+    const otpRecord = await Otp.findOne({ email: email, otp: otp });
+    if (otpRecord == null) {
+      res.status(400).json({
+        message: "Invalid OTP",
+      });
+      return;
+    }
+
+    await Otp.deleteMany({ email: email });
+
+    const hashedPassword = bcrypt.hashSync(newPassword, 10);
+
+    await User.updateOne(
+      { email: email },
+      {
+        $set: {
+          password: hashedPassword,
+          isEmailVerified: true,
+        },
+      }
+    );
+    res.json({
+      message: "Password updated successfully",
+    });
+  } catch (error) {
+    res.status(500).json({
+      message: "Failed to update password",
+      error: error.message,
+    });
+  }
+}
+
+export async function sendOTP(req, res) {
+  try {
+    const email = req.params.email;
+    const user = await User.findOne({
+      email: email,
+    });
+    if (user == null) {
+      res.status(404).json({
+        message: "User not found",
+      });
+      return;
+    }
+
+    await Otp.deleteMany({ email: email });
+
+    //genarate random 6 digit otp
+    const otpCode = Math.floor(100000 + Math.random() * 900000).toString();
+
+    const otp = new Otp({
+      email: email,
+      otp: otpCode,
+    });
+
+    await otp.save();
+
+    const message = {
+      from: "karunarathnageeth123@gmail.com",
+      to: email,
+      subject: "Password Reset OTP",
+      text: `Your OTP for password reset is: ${otpCode}`,
+    };
+    transporter.sendMail(message, (err, info) => {
+      if (err) {
+        res.status(500).json({
+          message: "Failed to send OTP",
+          error: err.message,
+        });
+        return;
+      } else {
+        res.json({
+          message: "OTP sent successfully",
+        });
+      }
+    });
+  } catch (error) {
+    res.status(500).json({
+      message: "Failed to send OTP",
+      error: error.message,
+    });
+  }
+}
+
+export async function getAllUsers(req, res) {
+  if (!isAdmin(req)) {
+    res.status(403).json({
+      message: "Only admin can access all users",
+    });
+    return;
+  }
+  try {
+    const users = await User.find();
+    res.json(users);
+  } catch (error) {
+    res.status(500).json({
+      message: "Error fetching users",
+      error: error.message,
+    });
+  }
+}
+
+export async function updateUserStatus(req, res) {
+  if (!isAdmin(req)) {
+    res.status(403).json({
+      message: "Only admin can update user status",
+    });
+    return;
+  }
+  const email = req.params.email;
+
+  if (req.user.email === email) {
+    res.status(400).json({
+      message: "Admin cannot update their own status",
+    });
+    return;
+  }
+
+  const isBlocked = req.body.isBlocked;
+
+  try {
+    await User.updateOne({ email: email }, { $set: { isBlocked: isBlocked } });
+    res.json({
+      message: "User status updated successfully",
+    });
+  } catch (error) {
+    res.status(500).json({
+      message: "Error updating user status",
+      error: error.message,
+    });
+  }
+}
